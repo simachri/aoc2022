@@ -4,8 +4,10 @@ fn main() {
     let input = include_str!("../input.txt");
 
     let result_day_1 = calculate_range_inclusion_count(input);
+    let result_day_2 = calculate_range_overlap_count(input);
 
     println!("Result of day 1: {}", result_day_1);
+    println!("Result of day 2: {}", result_day_2);
 }
 
 #[derive(Debug, PartialEq)]
@@ -56,6 +58,15 @@ impl BinaryRanges {
         }
         return false;
     }
+
+    fn one_overlaps_with_the_other(&self) -> bool {
+        let and = self.left & self.right;
+
+        if and != 0 {
+            return true;
+        }
+        return false;
+    }
 }
 
 fn parse_ranges(line: &str) -> Ranges {
@@ -87,6 +98,24 @@ fn parse_ranges(line: &str) -> Ranges {
             end: range_2.1,
         },
     };
+}
+
+fn calculate_range_overlap_count(input: &str) -> u32 {
+    return input
+        .lines()
+        .map(|line| {
+            let ranges = parse_ranges(line);
+
+            let max_bit_count = ranges.left.end.max(ranges.right.end);
+
+            ranges.convert_to_binary_representation(max_bit_count)
+        })
+        .fold(0, |mut range_overlap_count, binary_ranges| {
+            if binary_ranges.one_overlaps_with_the_other() {
+                range_overlap_count += 1;
+            }
+            range_overlap_count
+        });
 }
 
 fn calculate_range_inclusion_count(input: &str) -> u32 {
@@ -150,6 +179,21 @@ mod tests {
 ";
         let got = calculate_range_inclusion_count(input);
         let want = 2;
+
+        assert_eq!(want, got);
+    }
+
+    #[test]
+    fn test_part_2() {
+        let input = r"2-4,6-8
+2-3,4-5
+5-7,7-9
+2-8,3-7
+6-6,4-6
+2-6,4-8
+";
+        let got = calculate_range_overlap_count(input);
+        let want = 4;
 
         assert_eq!(want, got);
     }
