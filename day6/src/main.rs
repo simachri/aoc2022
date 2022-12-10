@@ -7,8 +7,10 @@ fn main() {
     let input = include_str!("../input.txt");
 
     let part_1_result = get_first_marker_pos(input, 4);
+    let part_2_result = get_first_marker_pos(input, 14);
 
     println!("Result of part 1: {}", part_1_result);
+    println!("Result of part 2: {}", part_2_result);
 }
 
 fn get_first_marker_pos(stream: &str, threshold_unique_chars: usize) -> usize {
@@ -61,7 +63,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_first_marker_pos_is_ok() {
+    fn test_get_packet_marker_pos_is_ok() {
         assert_eq!(7, get_first_marker_pos("mjqjpqmgbljsphdztnvjfqwrcgsmlb", 4));
         assert_eq!(5, get_first_marker_pos("bvwbjplbgvbhsrlpgdmjqwftvncz", 4));
         assert_eq!(6, get_first_marker_pos("nppdvjthqldpwncqszvftbrmjlhg", 4));
@@ -72,6 +74,24 @@ mod tests {
         assert_eq!(
             11,
             get_first_marker_pos("zcfzfwzzqfrljwzlrfnpqdbhtmscgvjw", 4)
+        );
+    }
+
+    #[test]
+    fn test_get_message_marker_pos_is_ok() {
+        assert_eq!(
+            19,
+            get_first_marker_pos("mjqjpqmgbljsphdztnvjfqwrcgsmlb", 14)
+        );
+        assert_eq!(23, get_first_marker_pos("bvwbjplbgvbhsrlpgdmjqwftvncz", 14));
+        assert_eq!(23, get_first_marker_pos("nppdvjthqldpwncqszvftbrmjlhg", 14));
+        assert_eq!(
+            29,
+            get_first_marker_pos("nznrnfrfntjfmvfwmzdfjlvtqnbhcprsg", 14)
+        );
+        assert_eq!(
+            26,
+            get_first_marker_pos("zcfzfwzzqfrljwzlrfnpqdbhtmscgvjw", 14)
         );
     }
 }
