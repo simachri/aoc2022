@@ -109,12 +109,26 @@ fn main() {
 
     let fstree = parse_fstree_from_cli_output(input);
     let day1_result = calculate_day_1(&fstree);
+    let day2_result = calculate_day_2(&fstree);
 
     println!("Result of day 1: {}", day1_result);
+    println!("Result of day 2: {}", day2_result);
 }
 
 fn calculate_day_1(fstree: &FSDir) -> u32 {
     return aggregate_dir_size_with_max_size_of(fstree, 100_000);
+}
+
+fn calculate_day_2(fstree: &FSDir) -> u32 {
+    let disk_size = 70_000_000;
+    let required_space = 30_000_000;
+    let used_space = fstree.size;
+    let space_to_be_freed: u32 = (((disk_size - required_space) as i32 - used_space as i32))
+        .abs()
+        .try_into()
+        .unwrap();
+
+    return get_size_of_dir_to_delete(fstree, space_to_be_freed);
 }
 
 fn aggregate_dir_size_with_max_size_of(fstree: &FSDir, max_size: u32) -> u32 {
@@ -135,6 +149,28 @@ fn aggregate_dir_size_with_max_size_of(fstree: &FSDir, max_size: u32) -> u32 {
     }
 
     return total_size;
+}
+
+fn get_size_of_dir_to_delete(fstree: &FSDir, required_size: u32) -> u32 {
+    let mut smallest_sufficient_dir_size = u32::MAX;
+
+    if fstree.size >= required_size {
+        smallest_sufficient_dir_size = fstree.size;
+    }
+
+    for child in fstree.children.iter() {
+        match child {
+            FSNode::File(..) => (),
+            FSNode::Directory(dir) => {
+                let dir_size = get_size_of_dir_to_delete(dir, required_size);
+                if dir_size >= required_size && dir_size < smallest_sufficient_dir_size {
+                    smallest_sufficient_dir_size = dir_size;
+                }
+            }
+        }
+    }
+
+    return smallest_sufficient_dir_size;
 }
 
 fn parse_fstree_from_cli_output(input: &str) -> FSDir {
@@ -346,5 +382,12 @@ $ ls
         let fstree = parse_fstree_from_cli_output(include_str!("../test.txt"));
 
         assert_eq!(95437, calculate_day_1(&fstree));
+    }
+
+    #[test]
+    fn test_day2() {
+        let fstree = parse_fstree_from_cli_output(include_str!("../test.txt"));
+
+        assert_eq!(24933642, calculate_day_2(&fstree));
     }
 }
