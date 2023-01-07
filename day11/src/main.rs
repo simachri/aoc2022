@@ -1,29 +1,32 @@
 use std::collections::VecDeque;
 
 #[derive(Debug)]
-enum Operand {
-    Old,
-    Digit(u32),
-}
-
-#[derive(Debug)]
-struct WorryOperation {
-    operator: char,
-    right_operand: Operand,
+enum WorryOperation {
+    AddConstant(u64),
+    MultiplyByConstant(u64),
+    Square,
+    SquarePart2,
+    MultiplyByConstantPart2(u64),
+    AddConstantPart2(u64),
 }
 
 impl WorryOperation {
-    fn execute(&self, old_value: u32) -> u32 {
-        let resolved_right_operand: u32;
-        match self.right_operand {
-            Operand::Old => resolved_right_operand = old_value,
-            Operand::Digit(digit) => resolved_right_operand = digit,
+    fn calculate_new_worry_level(&self, old_value: u64, divisor: Option<u64>) -> u64 {
+        match self {
+            WorryOperation::AddConstant(c) => old_value + c,
+            WorryOperation::MultiplyByConstant(c) => old_value * c,
+            WorryOperation::Square => old_value * old_value,
+            WorryOperation::SquarePart2 => (old_value * old_value) % divisor.unwrap(),
+            WorryOperation::MultiplyByConstantPart2(c) => (old_value * c) % divisor.unwrap(),
+            WorryOperation::AddConstantPart2(c) => (old_value + c) % divisor.unwrap(),
         }
+    }
 
-        match self.operator {
-            '+' => old_value + resolved_right_operand,
-            '*' => old_value * resolved_right_operand,
-            _ => panic!("Unknown operator"),
+    fn is_divisable_by(&self, worry_level: u64, divisor: u64) -> bool {
+        if worry_level % divisor == 0 {
+            return true;
+        } else {
+            return false;
         }
     }
 }
@@ -35,12 +38,14 @@ struct ThrowingItem {
 
 #[derive(Debug)]
 struct Item {
-    worry_level: u32,
+    worry_level: u64,
+    divisor_product: Option<u64>,
 }
 
 impl Item {
     fn inspect(&mut self, update_fn: &WorryOperation) {
-        self.worry_level = update_fn.execute(self.worry_level);
+        self.worry_level =
+            update_fn.calculate_new_worry_level(self.worry_level, self.divisor_product);
     }
 
     fn get_bored(&mut self) {
@@ -50,23 +55,23 @@ impl Item {
 
 #[derive(Debug)]
 struct Monkey {
-    id: u32,
+    id: u64,
     items: VecDeque<Item>,
     worry_operation: WorryOperation,
-    test_divisor: u32,
-    throw_to_monkey_id_if_true: u32,
-    throw_to_monkey_id_if_false: u32,
-    inspection_count: u32,
+    test_divisor: u64,
+    throw_to_monkey_id_if_true: u64,
+    throw_to_monkey_id_if_false: u64,
+    inspection_count: u64,
 }
 
 impl Monkey {
     fn new(
-        id: u32,
+        id: u64,
         initial_items: VecDeque<Item>,
         worry_operation: WorryOperation,
-        test_divisor: u32,
-        throw_to_monkey_id_if_true: u32,
-        throw_to_monkey_id_if_false: u32,
+        test_divisor: u64,
+        throw_to_monkey_id_if_true: u64,
+        throw_to_monkey_id_if_false: u64,
     ) -> Monkey {
         return Monkey {
             id,
@@ -91,51 +96,49 @@ impl Monkey {
         }
     }
 
-    fn inspect_item(&mut self) {
+    fn inspect_item(&mut self, is_part1: bool) {
         let item = self.items.get_mut(0).unwrap();
 
         println!("Monkey {} inspects item {}.", self.id, item.worry_level);
-
-        item.inspect(&self.worry_operation);
         self.inspection_count += 1;
 
+        item.inspect(&self.worry_operation);
         println!("New worry level after inspection: {}", item.worry_level);
 
-        item.get_bored();
-
-        println!("New worry level after getting bored: {}", item.worry_level);
+        if is_part1 {
+            item.get_bored();
+            println!("New worry level after getting bored: {}", item.worry_level);
+        }
     }
 
     fn throw_next_item(&mut self) -> ThrowingItem {
         let item = self.items.pop_front().unwrap();
+        let worry_level = item.worry_level;
 
-        match item.worry_level % self.test_divisor {
-            0 => ThrowingItem {
-                item,
-                test_result: true,
-            },
-            _ => ThrowingItem {
-                item,
-                test_result: false,
-            },
+        ThrowingItem {
+            item,
+            test_result: self
+                .worry_operation
+                .is_divisable_by(worry_level, self.test_divisor),
         }
     }
 }
 
 struct MonkeyGame {
     monkeys: Vec<Monkey>,
+    is_part1: bool,
 }
 
 impl MonkeyGame {
-    fn new(monkeys: Vec<Monkey>) -> MonkeyGame {
-        return MonkeyGame { monkeys };
+    fn new(monkeys: Vec<Monkey>, is_part1: bool) -> MonkeyGame {
+        return MonkeyGame { monkeys, is_part1 };
     }
 
     fn get_mutable_monkeys(
         &mut self,
-        main_monkey_id: u32,
-        target_monkey_id_true: u32,
-        target_monkey_id_false: u32,
+        main_monkey_id: u64,
+        target_monkey_id_true: u64,
+        target_monkey_id_false: u64,
     ) -> (
         Option<&mut Monkey>,
         Option<&mut Monkey>,
@@ -163,12 +166,14 @@ impl MonkeyGame {
         (main_monkey, target_monkey_true, target_monkey_false)
     }
 
-    fn play(&mut self, rounds: u32) -> u32 {
+    fn play(&mut self, rounds: u64) -> u64 {
+        let is_part1 = self.is_part1;
+
         for idx in 0..rounds {
-            println!("Playing round {}", idx + 1);
+            println!("\nPlaying round {}", format!("{:02}", idx + 1));
 
             for monkey_id in 0..self.monkeys.len() {
-                println!("It's the turn of monkey {}", monkey_id);
+                println!("\nIt's the turn of monkey {}", monkey_id);
 
                 let monkey = &self.monkeys[monkey_id];
 
@@ -182,7 +187,7 @@ impl MonkeyGame {
                 let target_monkey_false = mutable_monkeys.2.unwrap();
 
                 while main_monkey.has_item() {
-                    main_monkey.inspect_item();
+                    main_monkey.inspect_item(is_part1);
                     let throwing_item = main_monkey.throw_next_item();
 
                     if throwing_item.test_result {
@@ -199,44 +204,70 @@ impl MonkeyGame {
                         target_monkey_false.catch_item(throwing_item.item);
                     }
                 }
+
+                println!("Turn of monkey {} finished.", monkey_id);
+                println!("Inspection count: {}", main_monkey.inspection_count);
+            }
+
+            println!("\nRound {} finished. Inspection counts:", idx + 1);
+            for monkey in &self.monkeys {
+                println!(
+                    "Monkey {} inspected items {} times.",
+                    monkey.id, monkey.inspection_count
+                );
             }
         }
 
         self.multiply_two_highest_inspection_counts()
     }
 
-    fn multiply_two_highest_inspection_counts(&mut self) -> u32 {
+    fn multiply_two_highest_inspection_counts(&mut self) -> u64 {
         self.monkeys
             .sort_by(|a, b| b.inspection_count.cmp(&a.inspection_count));
 
-        let sum = self.monkeys.get(0).unwrap().inspection_count
+        let result = self.monkeys.get(0).unwrap().inspection_count
             * self.monkeys.get(1).unwrap().inspection_count;
 
-        return sum;
+        return result;
     }
 }
 
 fn main() {
     let input = include_str!("../input.txt");
 
-    println!("Result of part1: {}", calculate_monkey_business(input, 20));
+    println!(
+        "Result of part1: {}",
+        calculate_monkey_business(input, 20, true, None)
+    );
+
+    // For part 2: As all the divisors are pairwise coprime integers, the Chinese Remainder
+    // Theorem can be used.
+    println!(
+        "Result of part2: {}",
+        calculate_monkey_business(input, 10000, false, Some(2 * 3 * 5 * 7 * 11 * 13 * 17 * 19))
+    );
 }
 
-fn calculate_monkey_business(input: &str, rounds: u32) -> u32 {
-    let monkeys = parse_monkeys_from_input(input);
-    let mut monkey_game = MonkeyGame::new(monkeys);
+fn calculate_monkey_business(
+    input: &str,
+    rounds: u64,
+    is_part1: bool,
+    divisor: Option<u64>,
+) -> u64 {
+    let monkeys = parse_monkeys_from_input(input, is_part1, divisor);
+    let mut monkey_game = MonkeyGame::new(monkeys, is_part1);
 
     monkey_game.play(rounds)
 }
 
-fn parse_monkeys_from_input(input: &str) -> Vec<Monkey> {
+fn parse_monkeys_from_input(input: &str, is_part1: bool, divisor: Option<u64>) -> Vec<Monkey> {
     return input
         .split_terminator("\n\n")
-        .map(|monkey| parse_monkey_from_input(monkey))
+        .map(|monkey| parse_monkey_from_input(monkey, is_part1, divisor))
         .collect();
 }
 
-fn parse_monkey_from_input(monkey: &str) -> Monkey {
+fn parse_monkey_from_input(monkey: &str, is_part1: bool, divisor: Option<u64>) -> Monkey {
     // Monkey 0:
     //   Starting items: 79, 98
     //   Operation: new = old * 19
@@ -270,11 +301,12 @@ fn parse_monkey_from_input(monkey: &str) -> Monkey {
 
             return Item {
                 worry_level: item.parse().unwrap(),
+                divisor_product: divisor,
             };
         })
         .collect();
 
-    let worry_operation = parse_worry_operation(input_iter.next().unwrap());
+    let worry_operation = parse_worry_operation(input_iter.next().unwrap(), is_part1);
 
     let divisor = input_iter
         .next()
@@ -303,7 +335,7 @@ fn parse_monkey_from_input(monkey: &str) -> Monkey {
         .unwrap();
 
     return Monkey::new(
-        monkey_id,
+        monkey_id.into(),
         initial_items,
         worry_operation,
         divisor,
@@ -312,7 +344,7 @@ fn parse_monkey_from_input(monkey: &str) -> Monkey {
     );
 }
 
-fn parse_worry_operation(input: &str) -> WorryOperation {
+fn parse_worry_operation(input: &str, is_part1: bool) -> WorryOperation {
     let mut worry_operation_input = input
         .split_once(" = ")
         .unwrap()
@@ -328,17 +360,30 @@ fn parse_worry_operation(input: &str) -> WorryOperation {
         .unwrap();
 
     let operand_str = worry_operation_input.next().unwrap();
-    let right_operand: Operand;
-    if operand_str == "old" {
-        right_operand = Operand::Old;
-    } else {
-        right_operand = Operand::Digit(operand_str.parse().unwrap());
-    }
 
-    return WorryOperation {
-        operator,
-        right_operand,
-    };
+    if operator == '+' {
+        if is_part1 {
+            return WorryOperation::AddConstant(operand_str.parse().unwrap());
+        } else {
+            return WorryOperation::AddConstantPart2(operand_str.parse().unwrap());
+        }
+    } else if operator == '*' {
+        if operand_str == "old" {
+            if is_part1 {
+                return WorryOperation::Square;
+            } else {
+                return WorryOperation::SquarePart2;
+            }
+        } else {
+            if is_part1 {
+                return WorryOperation::MultiplyByConstant(operand_str.parse().unwrap());
+            } else {
+                return WorryOperation::MultiplyByConstantPart2(operand_str.parse().unwrap());
+            }
+        }
+    } else {
+        panic!("Unknown operator: {}", operator);
+    }
 }
 
 #[cfg(test)]
@@ -356,17 +401,23 @@ mod tests {
 
         let want = Monkey::new(
             0,
-            VecDeque::from(vec![Item { worry_level: 79 }, Item { worry_level: 98 }]),
-            WorryOperation {
-                operator: '*',
-                right_operand: Operand::Digit(19),
-            },
+            VecDeque::from(vec![
+                Item {
+                    worry_level: 79,
+                    divisor_product: None,
+                },
+                Item {
+                    worry_level: 98,
+                    divisor_product: None,
+                },
+            ]),
+            WorryOperation::MultiplyByConstant(19),
             23,
             2,
             3,
         );
 
-        let got = parse_monkey_from_input(monkey_input);
+        let got = parse_monkey_from_input(monkey_input, false, None);
 
         assert_eq!(got.id, want.id);
         assert_eq!(
@@ -391,6 +442,33 @@ mod tests {
     #[test]
     fn test_part1() {
         let input = include_str!("../test.txt");
-        assert_eq!(calculate_monkey_business(input, 20), 10605);
+        assert_eq!(calculate_monkey_business(input, 20, true, None), 10605);
+    }
+
+    #[test]
+    fn test_part2_one_round() {
+        let input = include_str!("../test.txt");
+        assert_eq!(
+            calculate_monkey_business(input, 1, false, Some(13 * 17 * 19 * 23)),
+            4 * 6
+        );
+    }
+
+    #[test]
+    fn test_part2_twenty_rounds() {
+        let input = include_str!("../test.txt");
+        assert_eq!(
+            calculate_monkey_business(input, 20, false, Some(13 * 17 * 19 * 23)),
+            99 * 103
+        );
+    }
+
+    #[test]
+    fn test_part2_all_rounds() {
+        let input = include_str!("../test.txt");
+        assert_eq!(
+            calculate_monkey_business(input, 10000, false, Some(13 * 17 * 19 * 23)),
+            2713310158
+        );
     }
 }
