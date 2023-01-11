@@ -4,7 +4,12 @@ type GridPos = (u32, u32);
 type Path = Vec<GridPos>;
 type ShortestPath = Option<Path>;
 
-#[derive(Debug, PartialEq)]
+enum StartingPos {
+    S,
+    AllLowestPoints,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 struct GridSquare {
     height: u32,
     visited: bool,
@@ -16,7 +21,7 @@ impl GridSquare {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct Board {
     start: GridPos,
     end: GridPos,
@@ -24,6 +29,20 @@ struct Board {
 }
 
 impl Board {
+    fn get_lowest_points(&self) -> Vec<GridPos> {
+        let mut lowest_points = Vec::new();
+
+        for (y, row) in self.grid.iter().enumerate() {
+            for (x, square) in row.iter().enumerate() {
+                if square.height == 'a' as u32 {
+                    lowest_points.push((y as u32, x as u32));
+                }
+            }
+        }
+
+        lowest_points
+    }
+
     fn get_square_mut_at(&mut self, pos: GridPos) -> Option<&mut GridSquare> {
         let (row, col) = pos;
         self.grid
@@ -116,14 +135,44 @@ impl Board {
 fn main() {
     let input = include_str!("../input.txt");
 
-    println!("Result of part 1: {}", find_shortest_path(input).unwrap());
+    println!(
+        "Result of part 1: {}",
+        find_shortest_path(input, StartingPos::S).unwrap()
+    );
+    println!(
+        "Result of part 2: {}",
+        find_shortest_path(input, StartingPos::AllLowestPoints).unwrap()
+    );
 }
 
-fn find_shortest_path(input: &str) -> Option<u32> {
-    let mut shortest_path: ShortestPath = None;
-
+fn find_shortest_path(input: &str, start_pos: StartingPos) -> Option<u32> {
     let mut board = parse_board(input);
-    let start_pos = board.start;
+
+    match start_pos {
+        StartingPos::S => {
+            let start_pos = board.start;
+            follow_path_from(&mut board, start_pos)
+        }
+        StartingPos::AllLowestPoints => {
+            let lowest_starting_positions = board.get_lowest_points();
+            let mut shortest_path = u32::MAX;
+
+            for pos in lowest_starting_positions {
+                let mut fresh_board = board.clone();
+                let path_length = follow_path_from(&mut fresh_board, pos);
+
+                if path_length.is_some() && path_length.unwrap() < shortest_path {
+                    shortest_path = path_length.unwrap();
+                }
+            }
+
+            Some(shortest_path)
+        }
+    }
+}
+
+fn follow_path_from(mut board: &mut Board, start_pos: GridPos) -> Option<u32> {
+    let mut shortest_path: ShortestPath = None;
 
     let mut possible_paths: VecDeque<Path> = VecDeque::new();
     possible_paths.push_back(vec![start_pos]);
@@ -162,7 +211,7 @@ fn breadth_first(
             board.get_square_mut_at(n).unwrap().set_visited();
 
             if n == board.end {
-                println!("\nReached end position: {:?}", board.end);
+                println!("Reached end position: {:?}", board.end);
                 println!("Steps count: {:?}", new_path.len() - 1);
 
                 if shortest_path.is_none() {
@@ -310,6 +359,16 @@ Edc";
     fn test_part1() {
         let input = include_str!("../test.txt");
 
-        assert_eq!(find_shortest_path(input).unwrap(), 31);
+        assert_eq!(find_shortest_path(input, StartingPos::S).unwrap(), 31);
+    }
+
+    #[test]
+    fn test_part2() {
+        let input = include_str!("../test.txt");
+
+        assert_eq!(
+            find_shortest_path(input, StartingPos::AllLowestPoints).unwrap(),
+            29
+        );
     }
 }
