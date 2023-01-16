@@ -23,12 +23,52 @@ fn main() {
     let input = include_str!("../input.txt");
 
     println!("Result of day 1: {}", sum_of_indices_in_right_order(input));
+    println!("Result of day 2: {}", product_of_marker_indices(input));
+}
+
+fn product_of_marker_indices(input: &str) -> u32 {
+    let mut product: u32 = 1;
+
+    let mut data_packets = parse_input_as_data_packet_list(input);
+
+    // Add markers:
+    // [[2]]
+    // [[6]]
+    let first_marker = vec![PacketData::PacketDataList(vec![
+        PacketData::PacketDataList(vec![PacketData::Integer(2)]),
+    ])];
+    data_packets.push(first_marker.clone());
+    let second_marker = vec![PacketData::PacketDataList(vec![
+        PacketData::PacketDataList(vec![PacketData::Integer(6)]),
+    ])];
+    data_packets.push(second_marker.clone());
+
+    data_packets.sort_by(|left_list, right_list| {
+        match compare_both_lists(left_list, right_list) {
+            Some(is_ordered) => {
+                if is_ordered {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Greater
+                }
+            }
+            None => unreachable!(),
+        }
+    });
+
+    for (idx, data_packet) in data_packets.iter().enumerate() {
+        if *data_packet == first_marker || *data_packet == second_marker {
+            product *= (idx + 1) as u32;
+        }
+    }
+
+    return product;
 }
 
 fn sum_of_indices_in_right_order(input: &str) -> u32 {
     let mut sum: u32 = 0;
 
-    let data_packets = parse_input(input);
+    let data_packets = parse_input_as_data_packet_pairs(input);
 
     for (idx, data_packet) in data_packets.iter().enumerate() {
         if compare_both_lists(&data_packet.left, &data_packet.right).unwrap() {
@@ -117,7 +157,20 @@ fn compare_both_lists(left: &PacketDataList, right: &PacketDataList) -> Option<b
     }
 }
 
-fn parse_input(input: &str) -> Vec<PacketDataPair> {
+fn parse_input_as_data_packet_list(input: &str) -> Vec<PacketDataList> {
+    let mut result: Vec<PacketDataList> = Vec::new();
+
+    for packet_data_raw in input.lines().filter(|line| !line.is_empty()) {
+        result.push(scan_packet_data_list(
+            &mut prepare_raw_packet_data(packet_data_raw).iter(),
+            true,
+        ));
+    }
+
+    return result;
+}
+
+fn parse_input_as_data_packet_pairs(input: &str) -> Vec<PacketDataPair> {
     let mut result: Vec<PacketDataPair> = Vec::new();
 
     for pair in input.split_terminator("\n\n") {
@@ -186,7 +239,9 @@ fn scan_packet_data_list<'a>(
                 if result_list.is_empty() && is_root_call {
                     result_list = scan_packet_data_list(data_iter, false);
                 } else {
-                    result_list.push(PacketData::PacketDataList(scan_packet_data_list(data_iter, false)));
+                    result_list.push(PacketData::PacketDataList(scan_packet_data_list(
+                        data_iter, false,
+                    )));
                 }
             }
             Some(RawDataEntity::SquareBracketClose) => {
@@ -259,5 +314,12 @@ mod tests {
         let input = include_str!("../test.txt");
 
         assert_eq!(13, sum_of_indices_in_right_order(input));
+    }
+
+    #[test]
+    fn test_part2() {
+        let input = include_str!("../test.txt");
+
+        assert_eq!(140, product_of_marker_indices(input));
     }
 }
