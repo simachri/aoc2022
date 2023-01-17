@@ -7,18 +7,14 @@ enum CaveElement {
 
 #[derive(PartialEq)]
 enum SandState {
-    Falling,
     Settled,
     Vanished,
-}
-
-struct GrainOfSand {
-    state: SandState,
-    pos: (usize, usize),
+    SourceBlocked,
 }
 
 type CaveSlice = [[CaveElement; 1000]; 170];
 type Pos = (u32, u32);
+type LowestRockRowIdx = usize;
 
 const POURING_SAND_SOURCE_POS: Pos = (0, 500);
 
@@ -27,17 +23,44 @@ fn main() {
 
     println!(
         "Result of part 1: {}",
-        calculate_amount_of_resting_sand(input)
+        calculate_amount_of_resting_sand_part1(input)
+    );
+    println!(
+        "Result of part 2: {}",
+        calculate_amount_of_resting_sand_part2(input)
     );
 }
 
-fn calculate_amount_of_resting_sand(input: &str) -> u32 {
+fn calculate_amount_of_resting_sand_part2(input: &str) -> u32 {
     let mut amount_of_resting_sand = 0;
 
-    let mut cave = scan_cave(input);
+    let mut cave: CaveSlice;
+    let lowest_rock_row_idx: LowestRockRowIdx;
+    (cave, lowest_rock_row_idx) = scan_cave(input);
+
+    add_ground(&mut cave, lowest_rock_row_idx + 2);
 
     loop {
-        let sand_state = let_sand_pour(&mut cave, POURING_SAND_SOURCE_POS);
+        let sand_state = let_sand_pour(&mut cave, POURING_SAND_SOURCE_POS, POURING_SAND_SOURCE_POS);
+
+        amount_of_resting_sand += 1;
+
+        if sand_state == SandState::SourceBlocked {
+            break;
+        }
+    }
+
+    return amount_of_resting_sand;
+}
+
+fn calculate_amount_of_resting_sand_part1(input: &str) -> u32 {
+    let mut amount_of_resting_sand = 0;
+
+    let mut cave: CaveSlice;
+    (cave, _) = scan_cave(input);
+
+    loop {
+        let sand_state = let_sand_pour(&mut cave, POURING_SAND_SOURCE_POS, POURING_SAND_SOURCE_POS);
 
         if sand_state == SandState::Vanished {
             break;
@@ -49,19 +72,29 @@ fn calculate_amount_of_resting_sand(input: &str) -> u32 {
     return amount_of_resting_sand;
 }
 
-fn let_sand_pour(cave: &mut CaveSlice, sand_grain_curr_pos: Pos) -> SandState {
+fn add_ground(cave: &mut CaveSlice, row_idx: usize) {
+    for col_idx in 0..cave[row_idx].len() {
+        cave[row_idx][col_idx] = CaveElement::Rock;
+    }
+}
+
+fn let_sand_pour(cave: &mut CaveSlice, sand_grain_curr_pos: Pos, source_pos: Pos) -> SandState {
     match calculcate_next_sand_grain_pos(cave, sand_grain_curr_pos) {
         Some(next_pos) => {
             if next_pos == sand_grain_curr_pos {
                 cave[sand_grain_curr_pos.0 as usize][sand_grain_curr_pos.1 as usize] =
                     CaveElement::Sand;
-                return SandState::Settled;
+
+                if next_pos == source_pos {
+                    return SandState::SourceBlocked;
+                } else {
+                    return SandState::Settled;
+                }
             } else {
-                return let_sand_pour(cave, next_pos);
+                return let_sand_pour(cave, next_pos, source_pos);
             }
         }
         None => {
-            println!("Sand grain vanished.");
             SandState::Vanished
         }
     }
@@ -94,8 +127,9 @@ fn calculcate_next_sand_grain_pos(cave: &CaveSlice, sand_grain_curr_pos: Pos) ->
     return Some((next_row.try_into().unwrap(), next_col.try_into().unwrap()));
 }
 
-fn scan_cave(input: &str) -> CaveSlice {
+fn scan_cave(input: &str) -> (CaveSlice, LowestRockRowIdx) {
     let mut cave = [[CaveElement::Air; 1000]; 170];
+    let mut lowest_rock_row_idx = 0;
 
     for line in input.lines() {
         let mut curr_pos: Option<Pos> = None;
@@ -115,10 +149,14 @@ fn scan_cave(input: &str) -> CaveSlice {
             add_rocks_to_cave(&mut cave, curr_pos.unwrap(), next_pos);
 
             curr_pos = Some(next_pos);
+
+            if next_pos.0 > lowest_rock_row_idx.try_into().unwrap() {
+                lowest_rock_row_idx = next_pos.0.try_into().unwrap();
+            }
         }
     }
 
-    return cave;
+    return (cave, lowest_rock_row_idx);
 }
 
 fn add_rocks_to_cave(cave: &mut CaveSlice, start_pos: Pos, end_pos: Pos) {
@@ -145,10 +183,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_part2() {
+        let input = include_str!("../test.txt");
+
+        assert_eq!(93, calculate_amount_of_resting_sand_part2(input));
+    }
+
+    #[test]
     fn test_part1() {
         let input = include_str!("../test.txt");
 
-        assert_eq!(24, calculate_amount_of_resting_sand(input));
+        assert_eq!(24, calculate_amount_of_resting_sand_part1(input));
     }
 
     #[test]
@@ -177,7 +222,7 @@ mod tests {
         want[9][495] = CaveElement::Rock;
         want[9][494] = CaveElement::Rock;
 
-        let got = scan_cave(input);
+        let (got, _) = scan_cave(input);
         for col_idx in 494..=503 {
             for row_idx in 0..=9 {
                 assert_eq!(
