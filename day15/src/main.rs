@@ -1,8 +1,34 @@
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::collections::HashSet;
+use std::fmt;
 
 type BeaconAndSensorPos = Vec<Pos>;
+type ImpossibleBeaconPos = bool;
+
+struct SearchArea {
+    impossible_beacon_pos: Vec<Vec<ImpossibleBeaconPos>>,
+}
+
+struct XCoordinatesCoveredBySensors {
+    min: i32,
+    max: i32,
+}
+
+impl fmt::Display for SearchArea {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for row in self.impossible_beacon_pos.iter() {
+            for col in row {
+                if *col {
+                    write!(f, "#")?;
+                } else {
+                    write!(f, ".")?;
+                }
+            }
+            writeln!(f)?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, PartialEq)]
 struct Pos {
@@ -23,33 +49,56 @@ fn main() {
         "Result of part 1: {}",
         calculate_impossible_pos_count(input, 2_000_000)
     );
+    // println!(
+    //     "Result of part 2: {}",
+    //     calculate_tuning_frequency(
+    //         input,
+    //         SearchArea {
+    //             impossible_beacon_pos: vec![vec![false; 4_000_000]; 4_000_000]
+    //         }
+    //     )
+    // );
+}
+
+fn calculate_tuning_frequency(input: &str, mut search_area: SearchArea) -> u32 {
+    let mut one_possible_pos: Pos = Pos { x: 0, y: 0 };
+
+    let (sensors, beacon_and_sensor_pos, _) = parse_sensors(input);
+
+    return one_possible_pos.x as u32 * 4_000_000 + one_possible_pos.y as u32;
 }
 
 fn calculate_impossible_pos_count(input: &str, y: u32) -> u32 {
-    let mut impossible_positions_x: HashSet<i32> = HashSet::new();
+    let mut impossible_beacon_pos_count = 0;
 
-    let (sensors, beacon_and_sensor_pos) = parse_sensors(input);
+    let (sensors, beacon_and_sensor_pos, x_coordinates_covered_by_sensors) = parse_sensors(input);
 
-    for sensor in sensors {
-        let found_positions_x = calculate_impossible_positions_x(&sensor.pos, sensor.range, y);
-
-        if found_positions_x.is_none() {
+    for x in x_coordinates_covered_by_sensors.min..=x_coordinates_covered_by_sensors.max {
+        if beacon_and_sensor_pos.contains(&Pos {
+            x: x as i32,
+            y: y as i32,
+        }) {
             continue;
         }
 
-        for position_x in found_positions_x.unwrap() {
-            if beacon_and_sensor_pos.contains(&Pos {
-                x: position_x,
-                y: y.try_into().unwrap(),
-            }) {
-                continue;
-            }
-
-            impossible_positions_x.insert(position_x);
+        if is_covered_by_any_sensor(&Pos { x, y: y as i32 }, &sensors) {
+            impossible_beacon_pos_count += 1;
         }
     }
 
-    return impossible_positions_x.len() as u32;
+    return impossible_beacon_pos_count;
+}
+
+fn is_covered_by_any_sensor(pos: &Pos, sensors: &Vec<Sensor>) -> bool {
+    for sensor in sensors {
+        let distance_to_sensor = (sensor.pos.x).max(pos.x) - (sensor.pos.x).min(pos.x)
+            + (sensor.pos.y).max(pos.y) - (sensor.pos.y).min(pos.y);
+        if distance_to_sensor <= sensor.range as i32 {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /// Returns the x coordinates of all impossible positions for a given sensor and a given baseline
@@ -81,9 +130,19 @@ fn calculate_impossible_positions_x(pos: &Pos, range: u32, baseline_y: u32) -> O
     return Some(impossible_positions_x);
 }
 
-fn parse_sensors(input: &str) -> (Vec<Sensor>, BeaconAndSensorPos) {
+fn parse_sensors(
+    input: &str,
+) -> (
+    Vec<Sensor>,
+    BeaconAndSensorPos,
+    XCoordinatesCoveredBySensors,
+) {
     let mut sensors: Vec<Sensor> = Vec::new();
     let mut beacon_and_sensor_pos: BeaconAndSensorPos = Vec::new();
+    let mut x_coordinates_covered_by_sensors = XCoordinatesCoveredBySensors {
+        min: i32::MAX,
+        max: i32::MIN,
+    };
 
     lazy_static! {
         static ref RE: Regex = Regex::new(
@@ -100,7 +159,7 @@ fn parse_sensors(input: &str) -> (Vec<Sensor>, BeaconAndSensorPos) {
         let beacon_pos_x = matches.get(3).unwrap().as_str().parse::<i32>().unwrap();
         let beacon_pos_y = matches.get(4).unwrap().as_str().parse::<i32>().unwrap();
 
-        sensors.push(Sensor {
+        let sensor = Sensor {
             pos: Pos {
                 x: sensor_pos_x,
                 y: sensor_pos_y,
@@ -108,7 +167,18 @@ fn parse_sensors(input: &str) -> (Vec<Sensor>, BeaconAndSensorPos) {
             range: ((beacon_pos_x - sensor_pos_x).abs() + (beacon_pos_y - sensor_pos_y).abs())
                 .try_into()
                 .unwrap(),
-        });
+        };
+        let left_range = sensor.pos.x - sensor.range as i32;
+        let right_range = sensor.pos.x + sensor.range as i32;
+
+        if left_range < x_coordinates_covered_by_sensors.min {
+            x_coordinates_covered_by_sensors.min = left_range;
+        }
+        if right_range > x_coordinates_covered_by_sensors.max {
+            x_coordinates_covered_by_sensors.max = right_range;
+        }
+
+        sensors.push(sensor);
 
         beacon_and_sensor_pos.push(Pos {
             x: beacon_pos_x,
@@ -120,7 +190,11 @@ fn parse_sensors(input: &str) -> (Vec<Sensor>, BeaconAndSensorPos) {
         });
     }
 
-    return (sensors, beacon_and_sensor_pos);
+    return (
+        sensors,
+        beacon_and_sensor_pos,
+        x_coordinates_covered_by_sensors,
+    );
 }
 
 #[cfg(test)]
@@ -135,6 +209,21 @@ mod tests {
     }
 
     #[test]
+    fn test_part2() {
+        let input = include_str!("../test.txt");
+
+        assert_eq!(
+            calculate_tuning_frequency(
+                input,
+                SearchArea {
+                    impossible_beacon_pos: vec![vec![false; 20]; 20]
+                }
+            ),
+            56000011
+        );
+    }
+
+    #[test]
     fn test_parse_sensor_line() {
         let input = r"Sensor at x=2, y=18: closest beacon is at x=-2, y=15";
 
@@ -143,7 +232,7 @@ mod tests {
             range: 4 + 3,
         }];
 
-        let (sensors, _) = parse_sensors(input);
+        let (sensors, _, _) = parse_sensors(input);
 
         assert_eq!(want, sensors);
     }
