@@ -44,8 +44,6 @@ impl FromStr for RawValve {
     }
 }
 
-
-
 #[derive(Debug, PartialEq, Clone)]
 struct Valve {
     id: ValveId,
@@ -60,6 +58,7 @@ fn main() {
     let input = include_str!("../input.txt");
 
     println!("Solution of part 1: {}", part1(input));
+    println!("Solution of part 2: {}", part2(input));
 }
 
 fn part1(input: &str) -> u32 {
@@ -69,7 +68,7 @@ fn part1(input: &str) -> u32 {
     let valves = parse_valves_from_input(input);
     let distance_graph = floyd_warshall(&valves);
 
-    calculate_max_pressure_release(
+    calculate_max_pressure_for_one_runner(
         valves,
         distance_graph,
         STARTING_VALVE_ID,
@@ -77,7 +76,39 @@ fn part1(input: &str) -> u32 {
     )
 }
 
-fn calculate_max_pressure_release(
+fn part2(input: &str) -> u32 {
+    const STARTING_VALVE_ID: &str = "AA";
+    const TIME_REMAINING_MIN: u32 = 26;
+
+    let valves = parse_valves_from_input(input);
+    let distance_graph = floyd_warshall(&valves);
+
+    let pressure_release_for_opened_valves_state = calculate_max_pressure_for_two_runners(
+        valves,
+        distance_graph,
+        STARTING_VALVE_ID,
+        TIME_REMAINING_MIN,
+    );
+
+    let mut max_pressure_release = 0;
+    for runner_1_opened_valves in pressure_release_for_opened_valves_state.keys() {
+        for runner_2_opened_valves in pressure_release_for_opened_valves_state.keys() {
+            // Only consider disjoint sets of opened valves.
+            if runner_1_opened_valves & runner_2_opened_valves != 0 {
+                continue;
+            }
+
+            max_pressure_release = max_pressure_release.max(
+                pressure_release_for_opened_valves_state[runner_1_opened_valves]
+                    + pressure_release_for_opened_valves_state[runner_2_opened_valves],
+            );
+        }
+    }
+
+    max_pressure_release
+}
+
+fn calculate_max_pressure_for_one_runner(
     valves: Vec<Valve>,
     distance_graph: Vec<Vec<ValveDistance>>,
     starting_valve_id: &str,
@@ -110,6 +141,43 @@ fn calculate_max_pressure_release(
         0,
         time_window,
     )
+}
+
+fn calculate_max_pressure_for_two_runners(
+    valves: Vec<Valve>,
+    distance_graph: Vec<Vec<ValveDistance>>,
+    starting_valve_id: &str,
+    time_window: u32,
+) -> HashMap<BitmaskOfOpenValves, u32> {
+    let valves_idx_non_zero_flow_rate: Vec<usize> = valves
+        .iter()
+        .enumerate()
+        .filter(|(_, valve)| valve.flow_rate > 0)
+        .map(|(idx, _)| idx)
+        .collect();
+
+    let mut pressure_release_for_opened_valves_state: HashMap<BitmaskOfOpenValves, u32> =
+        HashMap::new();
+
+    let opened_valves_mask: BitmaskOfOpenValves = 0;
+
+    let starting_valve_idx = valves
+        .iter()
+        .position(|valve| valve.id == starting_valve_id)
+        .unwrap();
+
+    travelling_salesman_bruteforce(
+        &valves,
+        &distance_graph,
+        &valves_idx_non_zero_flow_rate,
+        opened_valves_mask,
+        &mut pressure_release_for_opened_valves_state,
+        starting_valve_idx,
+        0,
+        time_window,
+    );
+
+    pressure_release_for_opened_valves_state
 }
 
 fn travelling_salesman_bruteforce(
@@ -234,5 +302,12 @@ mod tests {
         let input = include_str!("../test.txt");
 
         assert_eq!(part1(input), 1651);
+    }
+
+    #[test]
+    fn test_part2() {
+        let input = include_str!("../test.txt");
+
+        assert_eq!(part2(input), 1707);
     }
 }
